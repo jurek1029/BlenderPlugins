@@ -1,7 +1,7 @@
 bl_info = {
     "name": "scn File Exporter",
     "author": "Jakub Jurek",
-    "version": (0,7),
+    "version": (0,8),
     "blender": (2, 59, 0),
     "location": "File > Export",
     "description": "Exports file to .scn",
@@ -91,27 +91,35 @@ def writeUV(normal,uv,f,obj,bm,uv_layer,uv_tex):
         f.write(struct.pack('<iii',fa[0],fa[1],fa[2]))
 
 def writeNoUV(normal,uv,f,obj,bm):
-    global mat
-    f.write(struct.pack('<cci',b'c',b'v',len(bm.verts))) # liczba vertexow do wczytania
-    if normal:
-        for v in bm.verts:
-            #f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
-            f.write(struct.pack('<ffffff',v.co.y, v.co.z, -v.co.x,v.normal.x,v.normal.y,v.normal.z))
-    else:
-        for v in bm.verts:
-            #f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
-            f.write(struct.pack('<fff',v.co.y, v.co.z, -v.co.x))    
+	global mat
+	mask = 0
+	if normal:
+		mask += 1
+	f.write(struct.pack('<ci',b'o',mask)) #o ocznacza nowy obiekt mask pierwszy bit to normalne 2 bit to uv
+	f.write(struct.pack('<i',(len(obj.name)+1)))# plus koniec stringa
+	for c in obj.name:
+		f.write(struct.pack('<B',ord(c))) # dlugosc nazwy obiektu
+	f.write(struct.pack('<B',0)) # koniec stringa w c++
+	f.write(struct.pack('<cci',b'c',b'v',len(bm.verts))) # liczba vertexow do wczytania
+	if normal:
+		for v in bm.verts:
+			#f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
+			f.write(struct.pack('<ffffff',v.co.y, v.co.z, -v.co.x,v.normal.x,v.normal.y,v.normal.z))
+	else:
+		for v in bm.verts:
+			#f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
+			f.write(struct.pack('<fff',v.co.y, v.co.z, -v.co.x))    
 #    if normal:
 #        f.write(struct.pack('cci',b'c',b'n',len(bm.verts))) # liczba normalnych do wczytania
 #        for v in bm.verts:   
              #f.write("n %f %f %f\n" % (v.normal.x,v.normal.y,v.normal.z))
 #              f.write(struct.pack('fff',v.normal.x,v.normal.y,v.normal.z))
               
-    f.write(struct.pack('<cci',b'c',b'f',len(bm.faces)))# liczba facow do wczytania          
-    for face in bm.faces:
-        mat = obj.material_slots[face.material_index].material
-        #f.write("f %d %d %d\n" % (face.verts[0].index,face.verts[1].index,face.verts[2].index))
-        f.write(struct.pack('<III',face.verts[0].index,face.verts[1].index,face.verts[2].index))
+	f.write(struct.pack('<cci',b'c',b'f',len(bm.faces)))# liczba facow do wczytania          
+	for face in bm.faces:
+		mat = obj.material_slots[face.material_index].material
+		#f.write("f %d %d %d\n" % (face.verts[0].index,face.verts[1].index,face.verts[2].index))
+		f.write(struct.pack('<III',face.verts[0].index,face.verts[1].index,face.verts[2].index))
                 
 
 
