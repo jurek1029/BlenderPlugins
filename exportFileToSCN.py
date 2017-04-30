@@ -1,13 +1,13 @@
 bl_info = {
     "name": "scn File Exporter",
     "author": "Jakub Jurek",
-    "version": (0,5),
+    "version": (0,7),
     "blender": (2, 59, 0),
     "location": "File > Export",
     "description": "Exports file to .scn",
     "warning": "file have to have scnObjectPanel properties",
-    "wiki_url": "http://wiki.blender.org/index.php/Extensions:2.6/Py/",
-    "category": "Object",
+    "wiki_url": "https://github.com/jurek1029/BlenderPlugins",
+    "category": "Import-Export",
 }
 
 import bpy
@@ -15,6 +15,105 @@ import bmesh
 from bpy import context
 import struct
 import os
+
+tex = ""
+mat = ""
+
+def writeUV(normal,uv,f,obj,bm,uv_layer,uv_tex):
+    global mat
+    global tex
+    mask = 0
+    if normal:
+        mask += 1
+    if uv:
+        mask += 2;
+    f.write(struct.pack('<ci',b'o',mask)) #o ocznacza nowy obiekt mask pierwszy bit to normalne 2 bit to uv
+    f.write(struct.pack('<i',(len(obj.name)+1)))# plus koniec stringa
+    for c in obj.name:
+        f.write(struct.pack('<B',ord(c))) # dlugosc nazwy obiektu
+    f.write(struct.pack('<B',0)) # koniec stringa w c++
+    verOut = []
+    uvOut = []
+    nOut = []
+    temp = []
+    faceOut = []
+    
+    for v in bm.verts: # tworzy kopie vertexow ktore maja wiecej niz jedo UV
+        for l in v.link_loops:
+            tempUV = [l[uv_layer].uv.x, l[uv_layer].uv.y]
+            if not (tempUV in temp):
+                #f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
+                verOut.append([v.co.x, v.co.y, v.co.z])
+                uvOut.append([l[uv_layer].uv.x, l[uv_layer].uv.y])
+                nOut.append([v.normal.x,v.normal.y,v.normal.z])
+            temp.append([l[uv_layer].uv.x, l[uv_layer].uv.y]) 
+        temp = []
+        
+    f.write(struct.pack('<cci',b'c',b'v',len(verOut))) # liczba vertexow do wczytania
+    if normal:
+        for v,uv,n in zip(verOut,uvOut,nOut):
+            f.write(struct.pack('<ffffffff',v[1],v[2],-v[0],n[0],n[1],n[2],uv[0],uv[1]))
+    else:
+         for v,uv in zip(verOut,uvOut):
+            f.write(struct.pack('<fffff',v[1],v[2],-v[0],uv[0],uv[1]))
+    
+    
+   # if normal:
+#        f.write(struct.pack('cci',b'c',b'n',len(nOut))) # liczba normalnych do wczytania
+#        for n in nOut:
+#            #f.write("n %f %f %f\n" % (n[0],n[1],n[2]))   
+#            f.write(struct.pack('fff',n[0],n[1],n[2]))
+    
+#    f.write(struct.pack('cci',b'c',b'u',len(uvOut)))# liczba uv do wczytania
+#    for uv in uvOut:
+        #f.write("u %f %f \n" % (uv[0],uv[1]))
+#        f.write(struct.pack('ff',uv[0],uv[1]))
+    
+    temp2 = []
+    for i,(v, uv) in enumerate(zip(verOut, uvOut)):
+        temp2.append([v,uv])
+    fa = []
+    for face in bm.faces:
+        tex = getattr(face[uv_tex].image, "name", "")
+        if "." not in tex:
+            tex = tex +"."+getattr(face[uv_tex].image, "file_format", "")
+        mat = obj.material_slots[face.material_index].material
+        #f.write("f")                
+        for loop, vert in zip(face.loops, face.verts):               
+            #f.write(" %d" % temp2.index([[obj.data.vertices[vert.index].co.x, obj.data.vertices[vert.index].co.y, obj.data.vertices[vert.index].co.z], [loop[uv_layer].uv.x, loop[uv_layer].uv.y]]))
+            fa.append(temp2.index([[obj.data.vertices[vert.index].co.x, obj.data.vertices[vert.index].co.y, obj.data.vertices[vert.index].co.z], [loop[uv_layer].uv.x, loop[uv_layer].uv.y]]))
+        #f.write("\n")
+        faceOut.append(fa)
+        fa = []
+        
+    f.write(struct.pack('<cci',b'c',b'f',len(faceOut)))# liczba facow do wczytania
+    for fa in faceOut:
+        f.write(struct.pack('<iii',fa[0],fa[1],fa[2]))
+
+def writeNoUV(normal,uv,f,obj,bm):
+    global mat
+    f.write(struct.pack('<cci',b'c',b'v',len(bm.verts))) # liczba vertexow do wczytania
+    if normal:
+        for v in bm.verts:
+            #f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
+            f.write(struct.pack('<ffffff',v.co.y, v.co.z, -v.co.x,v.normal.x,v.normal.y,v.normal.z))
+    else:
+        for v in bm.verts:
+            #f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
+            f.write(struct.pack('<fff',v.co.y, v.co.z, -v.co.x))    
+#    if normal:
+#        f.write(struct.pack('cci',b'c',b'n',len(bm.verts))) # liczba normalnych do wczytania
+#        for v in bm.verts:   
+             #f.write("n %f %f %f\n" % (v.normal.x,v.normal.y,v.normal.z))
+#              f.write(struct.pack('fff',v.normal.x,v.normal.y,v.normal.z))
+              
+    f.write(struct.pack('<cci',b'c',b'f',len(bm.faces)))# liczba facow do wczytania          
+    for face in bm.faces:
+        mat = obj.material_slots[face.material_index].material
+        #f.write("f %d %d %d\n" % (face.verts[0].index,face.verts[1].index,face.verts[2].index))
+        f.write(struct.pack('<III',face.verts[0].index,face.verts[1].index,face.verts[2].index))
+                
+
 
 def write_some_data(context, filepath, normal, uv):
     objs = context.scene.objects   
@@ -28,111 +127,29 @@ def write_some_data(context, filepath, normal, uv):
             
             obj.update_from_editmode()
             me = obj.data
-            mat = ""
-            tex = ""
-
+          #  mat = ""
+          #  tex = ""
             bm = bmesh.new()
             bm.from_mesh(obj.data)
             bmesh.ops.triangulate(bm, faces=bm.faces)
             if uv:
                 uv_layer = bm.loops.layers.uv.active
                 if uv_layer is None:
-                    raise Exception("No active UV map (uv)")
-
-                uv_tex = bm.faces.layers.tex.active
-                if uv_tex is None:
-                    raise Exception("No active UV map (tex)")
-                
-                #f.write("o %s\n" % obj.name)
-                mask = 0
-                if normal:
-                    mask += 1
-                if uv:
-                    mask += 2;
-                f.write(struct.pack('<ci',b'o',mask)) #o ocznacza nowy obiekt mask pierwszy bit to normalne 2 bit to uv
-                f.write(struct.pack('<i',(len(obj.name)+1)))# plus koniec stringa
-                for c in obj.name:
-                    f.write(struct.pack('<B',ord(c))) # dlugosc nazwy obiektu
-                f.write(struct.pack('<B',0)) # koniec stringa w c++
-                verOut = []
-                uvOut = []
-                nOut = []
-                temp = []
-                faceOut = []
-                
-                for v in bm.verts: # tworzy kopie vertexow ktore maja wiecej niz jedo UV
-                    for l in v.link_loops:
-                        tempUV = [l[uv_layer].uv.x, l[uv_layer].uv.y]
-                        if not (tempUV in temp):
-                            #f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
-                            verOut.append([v.co.x, v.co.y, v.co.z])
-                            uvOut.append([l[uv_layer].uv.x, l[uv_layer].uv.y])
-                            nOut.append([v.normal.x,v.normal.y,v.normal.z])
-                        temp.append([l[uv_layer].uv.x, l[uv_layer].uv.y]) 
-                    temp = []
-                    
-                f.write(struct.pack('<cci',b'c',b'v',len(verOut))) # liczba vertexow do wczytania
-                if normal:
-                    for v,uv,n in zip(verOut,uvOut,nOut):
-                        f.write(struct.pack('<ffffffff',v[1],v[2],-v[0],n[0],n[1],n[2],uv[0],uv[1]))
+                    writeNoUV(normal,uv,f,obj,bm);
+                    print("No active UV map (uv)")
+                    #raise Exception("No active UV map (uv)")
                 else:
-                     for v,uv in zip(verOut,uvOut):
-                        f.write(struct.pack('<fffff',v[1],v[2],-v[0],uv[0],uv[1]))
-                
-                
-               # if normal:
-            #        f.write(struct.pack('cci',b'c',b'n',len(nOut))) # liczba normalnych do wczytania
-            #        for n in nOut:
-            #            #f.write("n %f %f %f\n" % (n[0],n[1],n[2]))   
-            #            f.write(struct.pack('fff',n[0],n[1],n[2]))
-                
-            #    f.write(struct.pack('cci',b'c',b'u',len(uvOut)))# liczba uv do wczytania
-            #    for uv in uvOut:
-                    #f.write("u %f %f \n" % (uv[0],uv[1]))
-            #        f.write(struct.pack('ff',uv[0],uv[1]))
-                
-                temp2 = []
-                for i,(v, uv) in enumerate(zip(verOut, uvOut)):
-                    temp2.append([v,uv])
-                fa = []
-                for face in bm.faces:
-                    tex = getattr(face[uv_tex].image, "name", "")
-                    if "." not in tex:
-                        tex = tex +"."+getattr(face[uv_tex].image, "file_format", "")
-                    mat = obj.material_slots[face.material_index].material
-                    #f.write("f")                
-                    for loop, vert in zip(face.loops, face.verts):               
-                        #f.write(" %d" % temp2.index([[obj.data.vertices[vert.index].co.x, obj.data.vertices[vert.index].co.y, obj.data.vertices[vert.index].co.z], [loop[uv_layer].uv.x, loop[uv_layer].uv.y]]))
-                        fa.append(temp2.index([[obj.data.vertices[vert.index].co.x, obj.data.vertices[vert.index].co.y, obj.data.vertices[vert.index].co.z], [loop[uv_layer].uv.x, loop[uv_layer].uv.y]]))
-                    #f.write("\n")
-                    faceOut.append(fa)
-                    fa = []
-                    
-                f.write(struct.pack('<cci',b'c',b'f',len(faceOut)))# liczba facow do wczytania
-                for fa in faceOut:
-                    f.write(struct.pack('<iii',fa[0],fa[1],fa[2]))
+                    uv_tex = bm.faces.layers.tex.active
+                    if uv_tex is None:
+                        writeNoUV(normal,uv,f,obj,bm)
+                        print("No active UV map (tex)")
+                        #raise Exception("No active UV map (tex)")
+                    else:
+                         writeUV(normal,uv,f,obj,bm,uv_layer,uv_tex)
+               
                     
             else:
-                f.write(struct.pack('<cci',b'c',b'v',len(bm.verts))) # liczba vertexow do wczytania
-                if normal:
-                    for v in bm.verts:
-                        #f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
-                        f.write(struct.pack('<ffffff',v.co.y, v.co.z, -v.co.x,v.normal.x,v.normal.y,v.normal.z))
-                else:
-                    for v in bm.verts:
-                        #f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
-                        f.write(struct.pack('<fff',v.co.y, v.co.z, -v.co.x))    
-            #    if normal:
-            #        f.write(struct.pack('cci',b'c',b'n',len(bm.verts))) # liczba normalnych do wczytania
-            #        for v in bm.verts:   
-                         #f.write("n %f %f %f\n" % (v.normal.x,v.normal.y,v.normal.z))
-            #              f.write(struct.pack('fff',v.normal.x,v.normal.y,v.normal.z))
-                          
-                f.write(struct.pack('<cci',b'c',b'f',len(bm.faces)))# liczba facow do wczytania          
-                for face in bm.faces:
-                    mat = obj.material_slots[face.material_index].material
-                    #f.write("f %d %d %d\n" % (face.verts[0].index,face.verts[1].index,face.verts[2].index))
-                    f.write(struct.pack('<III',face.verts[0].index,face.verts[1].index,face.verts[2].index))
+                writeNoUV(normal,uv,f,obj,bm)
                 
             if mat is not None:
                 #f.write("m %f %f %f %f %f %f %f %f\n" % (mat.diffuse_color[0],mat.diffuse_color[1],mat.diffuse_color[2],mat.specular_color[0],mat.specular_color[1],mat.specular_color[2],mat.specular_intensity,mat.alpha) )#deffuse #specualr #shine #transparency
@@ -146,6 +163,7 @@ def write_some_data(context, filepath, normal, uv):
                 f.write(struct.pack('<B',0)) # koniec stringa w c++
                 
                 temp = os.path.relpath(obj.TexturePath, obj.ProjectPath) # znajdywanie relatywnej scieżki 
+                temp +="\\"
                 if temp == ".":
                     f.write(struct.pack('<i',-1))
                 else:
@@ -158,6 +176,7 @@ def write_some_data(context, filepath, normal, uv):
             if obj.FragmentShaderName:          
                 f.write(struct.pack('<c',b's'))# inforamcjie o shaderch
                 temp = os.path.relpath(obj.ShaderPath, obj.ProjectPath) # znajdywanie relatywnej scieżki
+                temp +="\\"
                 if temp == ".":
                     f.write(struct.pack('<i',-1))
                 else:      
