@@ -1,7 +1,7 @@
 bl_info = {
     "name": "scn File Exporter",
     "author": "Jakub Jurek",
-    "version": (0,8),
+    "version": (0,9),
     "blender": (2, 59, 0),
     "location": "File > Export",
     "description": "Exports file to .scn",
@@ -26,7 +26,9 @@ def writeUV(normal,uv,f,obj,bm,uv_layer,uv_tex):
     if normal:
         mask += 1
     if uv:
-        mask += 2;
+        mask += 2
+    if obj.FlatShader:
+        mask += 4
     f.write(struct.pack('<ci',b'o',mask)) #o ocznacza nowy obiekt mask pierwszy bit to normalne 2 bit to uv
     f.write(struct.pack('<i',(len(obj.name)+1)))# plus koniec stringa
     for c in obj.name:
@@ -48,14 +50,15 @@ def writeUV(normal,uv,f,obj,bm,uv_layer,uv_tex):
                 nOut.append([v.normal.x,v.normal.y,v.normal.z])
             temp.append([l[uv_layer].uv.x, l[uv_layer].uv.y]) 
         temp = []
-        
-    f.write(struct.pack('<cci',b'c',b'v',len(verOut))) # liczba vertexow do wczytania
-    if normal:
-        for v,uv,n in zip(verOut,uvOut,nOut):
-            f.write(struct.pack('<ffffffff',v[1],v[2],-v[0],n[0],n[1],n[2],uv[0],uv[1]))
-    else:
-         for v,uv in zip(verOut,uvOut):
-            f.write(struct.pack('<fffff',v[1],v[2],-v[0],uv[0],uv[1]))
+    
+    if not obj.FlatShader:    
+        f.write(struct.pack('<cci',b'c',b'v',len(verOut))) # liczba vertexow do wczytania
+        if normal:
+            for v,uv,n in zip(verOut,uvOut,nOut):
+                f.write(struct.pack('<ffffffff',v[1],v[2],-v[0],n[1],n[2],-n[0],uv[0],uv[1]))
+        else:
+             for v,uv in zip(verOut,uvOut):
+                f.write(struct.pack('<fffff',v[1],v[2],-v[0],uv[0],uv[1]))
     
     
    # if normal:
@@ -86,42 +89,101 @@ def writeUV(normal,uv,f,obj,bm,uv_layer,uv_tex):
         faceOut.append(fa)
         fa = []
         
-    f.write(struct.pack('<cci',b'c',b'f',len(faceOut)))# liczba facow do wczytania
-    for fa in faceOut:
-        f.write(struct.pack('<iii',fa[0],fa[1],fa[2]))
+    if obj.FlatShader:
+        flatVec = []
+        flatNor = []
+        flatUv = []
+        tempNor = []        
+        for fa in faceOut:
+            flatVec.append(verOut[fa[0]])
+            flatVec.append(verOut[fa[1]])
+            flatVec.append(verOut[fa[2]])
+            tempNor = calcNorm(verOut[fa[0]],verOut[fa[1]],verOut[fa[2]])
+            flatNor.append(tempNor)
+            flatNor.append(tempNor)
+            flatNor.append(tempNor)
+            flatUv.append(uvOut[fa[0]])
+            flatUv.append(uvOut[fa[1]])
+            flatUv.append(uvOut[fa[2]])
+        f.write(struct.pack('<cci',b'c',b'v',len(faceOut)*3)) # liczba vertexow do wczytania
+        if normal:
+            for v,uv,n in zip(flatVec,flatUv,flatNor):
+                f.write(struct.pack('<ffffffff',v[1],v[2],-v[0],n[1],n[2],-n[0],uv[0],uv[1]))
+        else:
+             for v,uv in zip(flatVec,flatUv):
+                f.write(struct.pack('<fffff',v[1],v[2],-v[0],uv[0],uv[1]))
+                
+    if not obj.FlatShader:    
+        f.write(struct.pack('<cci',b'c',b'f',len(faceOut)))# liczba facow do wczytania
+        for fa in faceOut:
+            f.write(struct.pack('<iii',fa[0],fa[1],fa[2]))
+        
 
 def writeNoUV(normal,uv,f,obj,bm):
-	global mat
-	mask = 0
-	if normal:
-		mask += 1
-	f.write(struct.pack('<ci',b'o',mask)) #o ocznacza nowy obiekt mask pierwszy bit to normalne 2 bit to uv
-	f.write(struct.pack('<i',(len(obj.name)+1)))# plus koniec stringa
-	for c in obj.name:
-		f.write(struct.pack('<B',ord(c))) # dlugosc nazwy obiektu
-	f.write(struct.pack('<B',0)) # koniec stringa w c++
-	f.write(struct.pack('<cci',b'c',b'v',len(bm.verts))) # liczba vertexow do wczytania
-	if normal:
-		for v in bm.verts:
-			#f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
-			f.write(struct.pack('<ffffff',v.co.y, v.co.z, -v.co.x,v.normal.x,v.normal.y,v.normal.z))
-	else:
-		for v in bm.verts:
-			#f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
-			f.write(struct.pack('<fff',v.co.y, v.co.z, -v.co.x))    
-#    if normal:
-#        f.write(struct.pack('cci',b'c',b'n',len(bm.verts))) # liczba normalnych do wczytania
-#        for v in bm.verts:   
-             #f.write("n %f %f %f\n" % (v.normal.x,v.normal.y,v.normal.z))
-#              f.write(struct.pack('fff',v.normal.x,v.normal.y,v.normal.z))
+    global mat
+    mask = 0
+    if normal:
+        mask += 1
+    if obj.FlatShader:
+        mask += 4
+    f.write(struct.pack('<ci',b'o',mask)) #o ocznacza nowy obiekt mask pierwszy bit to normalne 2 bit to uv
+    f.write(struct.pack('<i',(len(obj.name)+1)))# plus koniec stringa
+    for c in obj.name:
+        f.write(struct.pack('<B',ord(c))) # dlugosc nazwy obiektu
+    f.write(struct.pack('<B',0)) #koniec stringa w c++
+    
+    if not obj.FlatShader:
+        f.write(struct.pack('<cci',b'c',b'v',len(bm.verts))) # liczba vertexow do wczytania
+        if normal:
+            for v in bm.verts:
+    			#f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
+                f.write(struct.pack('<ffffff',v.co.y, v.co.z, -v.co.x,v.normal.y,v.normal.z,-v.normal.x))
+        else:
+            for v in bm.verts:
+    			#f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
+                f.write(struct.pack('<fff',v.co.y, v.co.z, -v.co.x))    
               
-	f.write(struct.pack('<cci',b'c',b'f',len(bm.faces)))# liczba facow do wczytania          
-	for face in bm.faces:
-		mat = obj.material_slots[face.material_index].material
-		#f.write("f %d %d %d\n" % (face.verts[0].index,face.verts[1].index,face.verts[2].index))
-		f.write(struct.pack('<III',face.verts[0].index,face.verts[1].index,face.verts[2].index))
-                
+        f.write(struct.pack('<cci',b'c',b'f',len(bm.faces)))# liczba facow do wczytania          
+        for face in bm.faces:
+            mat = obj.material_slots[face.material_index].material
+    		#f.write("f %d %d %d\n" % (face.verts[0].index,face.verts[1].index,face.verts[2].index))
+            f.write(struct.pack('<III',face.verts[0].index,face.verts[1].index,face.verts[2].index))
+    else:
+        flatVec = []
+        flatNor = []
+        tempNor = []  
+        verOut = []
+        for v in bm.verts:
+            x = v.co.x
+            y = v.co.y
+            z = v.co.z
+            verOut.append([x,y,z])                  
+        for fa in bm.faces:
+            flatVec.append(verOut[fa.verts[0].index])
+            flatVec.append(verOut[fa.verts[1].index])
+            flatVec.append(verOut[fa.verts[2].index])
+            tempNor = calcNorm(verOut[fa.verts[0].index],verOut[fa.verts[1].index],verOut[fa.verts[2].index])
+            flatNor.append(tempNor)
+            flatNor.append(tempNor)
+            flatNor.append(tempNor)
+        f.write(struct.pack('<cci',b'c',b'v',len(bm.faces)*3)) # liczba vertexow do wczytania
+        if normal:
+            for v,n in zip(flatVec,flatNor):
+    			#f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
+                f.write(struct.pack('<ffffff',v[1],v[2],-v[0],n[1],n[2],-n[0]))
+        else:
+            for v in flatVec:
+    			#f.write("v %f %f %f\n" % (v.co.x, v.co.y, v.co.z))
+                f.write(struct.pack('<fff',v[1],v[2],-v[0]))    
+        for face in bm.faces:
+            mat = obj.material_slots[face.material_index].material
+         
 
+
+def calcNorm(v1,v2,v3):
+    ab = [v2[0] - v1[0],v2[1] - v1[1],v2[2] - v1[2]]
+    ac = [v3[0] - v1[0],v3[1] - v1[1],v3[2] - v1[2]]
+    return [ab[1]*ac[2] - ab[2]*ac[1], ab[2]*ac[0] - ab[0]*ac[2], ab[0]*ac[1] - ab[1]*ac[0]]
 
 def write_some_data(context, filepath, normal, uv):
     objs = context.scene.objects   
@@ -165,6 +227,7 @@ def write_some_data(context, filepath, normal, uv):
              
             if tex is not None and uv:
                 #f.write("t %s\n" % tex)
+                print(tex)
                 f.write(struct.pack('<cci',b'c',b't',(len(tex)+1))) # dlugosc nazwy textury
                 for c in tex:
                     f.write(struct.pack('<B',ord(c))) # nazwa textury

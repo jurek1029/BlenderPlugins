@@ -12,7 +12,7 @@ bl_info = {
 }
 
 import bpy
-from bpy.props import StringProperty
+from bpy.props import StringProperty, BoolProperty
 
 class HelloWorldPanel(bpy.types.Panel):
     """Creates a Panel in the Object properties window"""
@@ -32,6 +32,9 @@ class HelloWorldPanel(bpy.types.Panel):
         
         row = layout.row()
         row.prop(obj, "ProjectPath")
+		
+        row = layout.row()
+        row.prop(obj, "FlatShader")
         
         row = layout.row()
         row.prop(obj, "FragmentShaderName")
@@ -52,6 +55,7 @@ class HelloWorldPanel(bpy.types.Panel):
 def register():
     #bpy.types.Object.car_color = FloatVectorProperty(subtype='COLOR', size=3)
     bpy.types.Object.ProjectPath = StringProperty(subtype='FILE_PATH')
+    bpy.types.Object.FlatShader = BoolProperty()
     bpy.types.Object.FragmentShaderName = StringProperty(subtype='FILE_NAME')
     bpy.types.Object.VertexShaderName = StringProperty(subtype='FILE_NAME')
     bpy.types.Object.ShaderPath = StringProperty(subtype='FILE_PATH')
