@@ -1,7 +1,7 @@
 bl_info = {
     "name": "scn File Exporter",
     "author": "Jakub Jurek",
-    "version": (0,9),
+    "version": (1,0),
     "blender": (2, 59, 0),
     "location": "File > Export",
     "description": "Exports file to .scn",
@@ -193,80 +193,82 @@ def write_some_data(context, filepath, normal, uv):
     f = open(filepath, 'wb')
     f.write(struct.pack('<ci',b'n',len(objs)))
     for obj in objs:
-        if obj.type == "MESH":
-            
-            obj.update_from_editmode()
-            me = obj.data
-          #  mat = ""
-          #  tex = ""
-            bm = bmesh.new()
-            bm.from_mesh(obj.data)
-            bmesh.ops.triangulate(bm, faces=bm.faces)
-            if uv:
-                uv_layer = bm.loops.layers.uv.active
-                if uv_layer is None:
-                    writeNoUV(normal,uv,f,obj,bm);
-                    print("No active UV map (uv)")
-                    #raise Exception("No active UV map (uv)")
-                else:
-                    uv_tex = bm.faces.layers.tex.active
-                    if uv_tex is None:
-                        writeNoUV(normal,uv,f,obj,bm)
-                        print("No active UV map (tex)")
-                        #raise Exception("No active UV map (tex)")
+        if obj.ToExport :
+            if obj.type == "MESH":
+                
+                obj.update_from_editmode()
+                me = obj.data
+              #  mat = ""
+              #  tex = ""
+                bm = bmesh.new()
+                bm.from_mesh(obj.data)
+                bmesh.ops.triangulate(bm, faces=bm.faces)
+                if uv:
+                    uv_layer = bm.loops.layers.uv.active
+                    if uv_layer is None:
+                        writeNoUV(normal,uv,f,obj,bm);
+                        print("No active UV map (uv)")
+                        #raise Exception("No active UV map (uv)")
                     else:
-                         writeUV(normal,uv,f,obj,bm,uv_layer,uv_tex)
-               
-                    
-            else:
-                writeNoUV(normal,uv,f,obj,bm)
-                
-            if mat is not None:
-                #f.write("m %f %f %f %f %f %f %f %f\n" % (mat.diffuse_color[0],mat.diffuse_color[1],mat.diffuse_color[2],mat.specular_color[0],mat.specular_color[1],mat.specular_color[2],mat.specular_intensity,mat.alpha) )#deffuse #specualr #shine #transparency
-                f.write(struct.pack('<cffffffff',b'm',mat.diffuse_color[0],mat.diffuse_color[1],mat.diffuse_color[2],mat.specular_color[0],mat.specular_color[1],mat.specular_color[2],mat.specular_intensity,mat.alpha))
-             
-            if tex is not None and uv:
-                #f.write("t %s\n" % tex)
-                print(tex)
-                f.write(struct.pack('<cci',b'c',b't',(len(tex)+1))) # dlugosc nazwy textury
-                for c in tex:
-                    f.write(struct.pack('<B',ord(c))) # nazwa textury
-                f.write(struct.pack('<B',0)) # koniec stringa w c++
-                
-                temp = os.path.relpath(obj.TexturePath, obj.ProjectPath) # znajdywanie relatywnej scieżki 
-                temp +="\\"
-                if temp == ".":
-                    f.write(struct.pack('<i',-1))
+                        uv_tex = bm.faces.layers.tex.active
+                        if uv_tex is None:
+                            writeNoUV(normal,uv,f,obj,bm)
+                            print("No active UV map (tex)")
+                            #raise Exception("No active UV map (tex)")
+                        else:
+                             writeUV(normal,uv,f,obj,bm,uv_layer,uv_tex)
+                   
+                        
                 else:
-                    f.write(struct.pack('<i',(len(temp)+1))) # dlugosc relatywnej lokalizacji textury
-                    for c in temp:
-                        f.write(struct.pack('<B',ord(c))) # lokalizacja textury
+                    writeNoUV(normal,uv,f,obj,bm)
+                    
+                if mat is not None:
+                    #f.write("m %f %f %f %f %f %f %f %f\n" % (mat.diffuse_color[0],mat.diffuse_color[1],mat.diffuse_color[2],mat.specular_color[0],mat.specular_color[1],mat.specular_color[2],mat.specular_intensity,mat.alpha) )#deffuse #specualr #shine #transparency
+                    f.write(struct.pack('<cffffffff',b'm',mat.diffuse_color[0],mat.diffuse_color[1],mat.diffuse_color[2],mat.specular_color[0],mat.specular_color[1],mat.specular_color[2],mat.specular_intensity,mat.alpha))
+                 
+                if tex is not None and uv:
+                    #f.write("t %s\n" % tex)
+                    print(tex)
+                    f.write(struct.pack('<cci',b'c',b't',(len(tex)+1))) # dlugosc nazwy textury
+                    for c in tex:
+                        f.write(struct.pack('<B',ord(c))) # nazwa textury
                     f.write(struct.pack('<B',0)) # koniec stringa w c++
-            
-            
-            if obj.FragmentShaderName:          
-                f.write(struct.pack('<c',b's'))# inforamcjie o shaderch
-                temp = os.path.relpath(obj.ShaderPath, obj.ProjectPath) # znajdywanie relatywnej scieżki
-                temp +="\\"
-                if temp == ".":
-                    f.write(struct.pack('<i',-1))
-                else:      
-                    f.write(struct.pack('<i',(len(temp)+1))) # dlugosc lokalizacji shadereow
-                    for c in temp:
-                        f.write(struct.pack('<B',ord(c))) # lokalizacja shaderow
+                    
+                    temp = os.path.relpath(obj.TexturePath, obj.ProjectPath) # znajdywanie relatywnej scieżki 
+                    temp +="\\"
+                    if temp == ".":
+                        f.write(struct.pack('<i',-1))
+                    else:
+                        f.write(struct.pack('<i',(len(temp)+1))) # dlugosc relatywnej lokalizacji textury
+                        for c in temp:
+                            f.write(struct.pack('<B',ord(c))) # lokalizacja textury
+                        f.write(struct.pack('<B',0)) # koniec stringa w c++
+                
+                
+                if obj.FragmentShaderName:          
+                    f.write(struct.pack('<c',b's'))# inforamcjie o shaderch
+                    temp = os.path.relpath(obj.ShaderPath, obj.ProjectPath) # znajdywanie relatywnej scieżki
+                    temp +="\\"
+                    if temp == ".":
+                        f.write(struct.pack('<i',-1))
+                    else:      
+                        f.write(struct.pack('<i',(len(temp)+1))) # dlugosc lokalizacji shadereow
+                        for c in temp:
+                            f.write(struct.pack('<B',ord(c))) # lokalizacja shaderow
+                        f.write(struct.pack('<B',0)) # koniec stringa w c++
+                          
+                    f.write(struct.pack('<i',(len(obj.FragmentShaderName)+1))) # dlugosc fragment shadera
+                    for c in obj.FragmentShaderName:
+                        f.write(struct.pack('<B',ord(c))) # nazwa fragmanet shadera
                     f.write(struct.pack('<B',0)) # koniec stringa w c++
-                      
-                f.write(struct.pack('<i',(len(obj.FragmentShaderName)+1))) # dlugosc fragment shadera
-                for c in obj.FragmentShaderName:
-                    f.write(struct.pack('<B',ord(c))) # nazwa fragmanet shadera
-                f.write(struct.pack('<B',0)) # koniec stringa w c++
+                    
+                    f.write(struct.pack('<i',(len(obj.VertexShaderName)+1))) # dlugosc verttex shadera
+                    for c in obj.VertexShaderName:
+                        f.write(struct.pack('<B',ord(c))) # nazwa vertex shadera
+                    f.write(struct.pack('<B',0)) # koniec stringa w c++
                 
-                f.write(struct.pack('<i',(len(obj.VertexShaderName)+1))) # dlugosc verttex shadera
-                for c in obj.VertexShaderName:
-                    f.write(struct.pack('<B',ord(c))) # nazwa vertex shadera
-                f.write(struct.pack('<B',0)) # koniec stringa w c++
-                
-                
+            bm.free()
+            del bm    
             #if mat.raytrace_mirror.use:
                 ##f.write("s %f %f %f %f\n" % (mat.mirror_color[0],mat.mirror_color[1],mat.mirror_color[2],mat.raytrace_mirror.reflect_factor))         
                 #f.write(struct.pack('<cffff',b's',mat.mirror_color[0],mat.mirror_color[1],mat.mirror_color[2],mat.raytrace_mirror.reflect_factor))
@@ -279,8 +281,6 @@ def write_some_data(context, filepath, normal, uv):
     #f.write(struct.pack('<B',0)) # koniec stringa w c++    
    
     f.close()
-    bm.free()
-    del bm
     return {'FINISHED'}
 
 

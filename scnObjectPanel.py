@@ -2,7 +2,7 @@
 bl_info = {
     "name": "scn Object Panel",
     "author": "Jakub Jurek",
-    "version": (0,3),
+    "version": (0,4),
     "blender": (2, 59, 0),
     "location": "Properties > Window > Object",
     "description": "Set information for scn file exporter",
@@ -31,22 +31,27 @@ class HelloWorldPanel(bpy.types.Panel):
         row.label(text="Active object is: " + obj.name)
         
         row = layout.row()
-        row.prop(obj, "ProjectPath")
-		
-        row = layout.row()
-        row.prop(obj, "FlatShader")
+        row.prop(obj, "ToExport")
         
-        row = layout.row()
-        row.prop(obj, "FragmentShaderName")
-        
-        row = layout.row()
-        row.prop(obj, "VertexShaderName")
-        
-        row = layout.row()
-        row.prop(obj, "ShaderPath")
-        
-        row = layout.row()
-        row.prop(obj, "TexturePath")
+        if obj.ToExport:
+            
+            row = layout.row()
+            row.prop(obj, "ProjectPath")
+    		
+            row = layout.row()
+            row.prop(obj, "FlatShader")
+            
+            row = layout.row()
+            row.prop(obj, "FragmentShaderName")
+            
+            row = layout.row()
+            row.prop(obj, "VertexShaderName")
+            
+            row = layout.row()
+            row.prop(obj, "ShaderPath")
+            
+            row = layout.row()
+            row.prop(obj, "TexturePath")
 
         #row = layout.row()
         #row.operator("mesh.primitive_cube_add")
@@ -56,6 +61,7 @@ def register():
     #bpy.types.Object.car_color = FloatVectorProperty(subtype='COLOR', size=3)
     bpy.types.Object.ProjectPath = StringProperty(subtype='FILE_PATH')
     bpy.types.Object.FlatShader = BoolProperty()
+    bpy.types.Object.ToExport = BoolProperty()
     bpy.types.Object.FragmentShaderName = StringProperty(subtype='FILE_NAME')
     bpy.types.Object.VertexShaderName = StringProperty(subtype='FILE_NAME')
     bpy.types.Object.ShaderPath = StringProperty(subtype='FILE_PATH')
