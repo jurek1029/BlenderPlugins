@@ -17,3 +17,6 @@ Plugins to blender for flie export to .scn which is file extension for [BasicEng
 <p align="center">
 <img src="https://github.com/jurek1029/BlenderPlugins/blob/master/screenShots/panelLoca.PNG">
 </p>
+
+# Author
+* [Jakub Jurek](https://github.com/jurek1029)
